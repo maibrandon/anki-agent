@@ -7,8 +7,10 @@ import time
 from dataclasses import dataclass
 
 from .errors import AgentError
+from .backups import create_recovery_backup
+from .deletion import Deletions, DELETE_OPERATIONS
 
-OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck"}
+OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup"}
 MAX_BATCH = 50
 TTL = 600
 
@@ -20,28 +22,46 @@ class WriteResult:
 
 
 class Service:
-    def __init__(self):
+    def __init__(self, backup_root=None):
         self.previews = {}
+        self.deletions = Deletions(backup_root)
 
     def clear(self):
         self.previews.clear()
+        self.deletions.clear()
 
-    def dispatch(self, col, operation, params):
+    def validate_request(self, operation, params):
         if operation not in OPERATIONS:
             raise AgentError("unknown_operation", "Operation is not supported.")
         if not isinstance(params, dict):
             raise AgentError("invalid_request", "params must be an object.")
         allowed = {"status": set(), "list_decks": set(), "list_note_types": set(),
                    "search_notes": {"query", "limit", "offset"},
-                   "preview_notes": {"notes"}, "create_notes": {"preview_id"}, "create_deck": {"name"}}
+                   "preview_notes": {"notes"}, "create_notes": {"preview_id"}, "create_deck": {"name"},
+                   "preview_delete_cards": {"card_ids"}, "preview_delete_deck": {"deck_id"},
+                   "delete_cards": {"preview_id"}, "delete_deck": {"preview_id"}, "create_backup": set()}
         if set(params) - allowed[operation]:
             raise AgentError("invalid_request", "Unknown parameters.")
+
+    def dispatch(self, col, operation, params):
+        self.validate_request(operation, params)
         if operation == "status":
             return {"connected": True, "collection_available": col is not None,
                     "protocol_version": 1, "max_batch": MAX_BATCH}
         if col is None:
             raise AgentError("collection_unavailable", "Open an Anki profile with a collection first.")
+        if operation in DELETE_OPERATIONS:
+            raise AgentError("confirmation_required", "Deletion must be confirmed with Yes in Anki; request it through the Anki integration.")
         return getattr(self, operation)(col, **params)
+
+    def create_backup(self, col):
+        return create_recovery_backup(col, self.deletions.backup_root)
+
+    def preview_delete_cards(self, col, card_ids=None):
+        return self.deletions.preview(col, "delete_cards", card_ids)
+
+    def preview_delete_deck(self, col, deck_id=None):
+        return self.deletions.preview(col, "delete_deck", deck_id)
 
     def list_decks(self, col):
         return {"decks": [{"id": d.id, "name": d.name} for d in col.decks.all_names_and_ids()]}
@@ -80,7 +100,8 @@ class Service:
         for nid in ids[offset:offset + limit]:
             n = col.get_note(nid)
             notes.append({"id": n.id, "note_type": n.note_type()["name"],
-                          "fields": dict(n.items()), "tags": list(n.tags)})
+                          "fields": dict(n.items()), "tags": list(n.tags),
+                          "card_ids": list(col.card_ids_of_note(n.id))})
         return {"notes": notes, "total": len(ids), "offset": offset,
                 "has_more": offset + limit < len(ids)}
 

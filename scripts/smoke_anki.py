@@ -11,9 +11,10 @@ import threading
 import time
 import traceback
 import faulthandler
+import queue
 
 faulthandler.enable()
-faulthandler.dump_traceback_later(25)
+faulthandler.dump_traceback_later(60)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -26,7 +27,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-async def exercise(connection):
+async def exercise(connection, decisions):
     params = StdioServerParameters(command=sys.executable, args=["-m", "anki_agent_mcp.server"],
                                   cwd=str(connection.parent),
                                   env={**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, "ANKI_AGENT_CONNECTION_FILE": str(connection)})
@@ -34,7 +35,10 @@ async def exercise(connection):
         async with ClientSession(read, write) as session:
             await session.initialize()
             tools = await session.list_tools()
-            assert {t.name for t in tools.tools} == {"connection_status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck"}
+            assert {t.name for t in tools.tools} == {"connection_status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup"}
+            annotations = {t.name: t.annotations for t in tools.tools}
+            assert annotations["delete_cards"].destructiveHint and annotations["delete_deck"].destructiveHint
+            assert annotations["preview_delete_cards"].readOnlyHint
             async def call(name, args=None):
                 print("Testing", name, flush=True)
                 result = await session.call_tool(name, args or {})
@@ -59,7 +63,7 @@ async def exercise(connection):
             assert (await call("search_notes"))["total"] == 2
             invalid = await session.call_tool("preview_notes", {"notes": notes})
             assert invalid.isError
-            print("PASS: real Anki app, seven MCP tools, deck creation, read-only preview, Basic/Cloze creation, retry, search, error propagation", flush=True)
+            print("PASS: real Anki app, twelve MCP tools, correct destructive annotations, deck creation, read-only preview, Basic/Cloze creation, retry, search, error propagation", flush=True)
     result = await asyncio.to_thread(subprocess.run,
         [sys.executable, str(ROOT / "examples/from_text.py"), str(ROOT / "examples/study-notes.txt"), "--deck", "anki-agent", "--create"],
         input="CREATE\n", text=True, capture_output=True,
@@ -67,6 +71,51 @@ async def exercise(connection):
     assert result.returncode == 0, result.stderr
     assert '"created": 3' in result.stdout, result.stdout
     print("PASS: local text example previewed and created three notes through MCP", flush=True)
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            async def call(name, args=None):
+                result = await session.call_tool(name, args or {})
+                assert not result.isError, result.content
+                return result.structuredContent or json.loads(result.content[0].text)
+            deck = await call("create_deck", {"name": "anki-agent-delete-test"})
+            specs = [
+                {"deck": "anki-agent-delete-test", "note_type": "Basic", "fields": {"Front": "Deletion safety example", "Back": "Must confirm Yes"}},
+                {"deck": "anki-agent-delete-test", "note_type": "Cloze", "fields": {"Text": "{{c1::Delete}} needs {{c2::confirmation}}.", "Back Extra": "Disposable only"}},
+            ]
+            p = await call("preview_notes", {"notes": specs})
+            made = await call("create_notes", {"preview_id": p["preview_id"]})
+            found = await call("search_notes", {"query": f"nid:{made['note_ids'][0]}"})
+            card_ids = found["notes"][0]["card_ids"]
+            deletion = await call("preview_delete_cards", {"card_ids": card_ids})
+            for choice in ("no", "timeout"):
+                decisions.put(choice)
+                denied = await session.call_tool("delete_cards", {"preview_id": deletion["preview_id"]})
+                assert denied.isError and "confirmation_denied" in denied.content[0].text
+                assert (await call("search_notes", {"query": f"nid:{made['note_ids'][0]}"}))["total"] == 1
+            # An agent cannot bypass the native dialog with a wire-level boolean.
+            # The SDK may ignore unknown arguments; the native approval is still
+            # mandatory, so simulate No rather than waiting out the full timer.
+            decisions.put("no")
+            denied = await session.call_tool("delete_cards", {"preview_id": deletion["preview_id"], "confirmed": True})
+            assert denied.isError
+            decisions.put("yes")
+            deleted = await call("delete_cards", {"preview_id": deletion["preview_id"]})
+            assert deleted["deleted_cards"] == 1 and deleted["deleted_notes"] == 1
+            assert Path(deleted["backup"]["path"]).is_file()
+            replay = await call("delete_cards", {"preview_id": deletion["preview_id"]})
+            assert replay["replayed"]
+            deck_preview = await call("preview_delete_deck", {"deck_id": deck["deck_id"]})
+            assert deck_preview["card_count"] == 2
+            decisions.put("no")
+            denied = await session.call_tool("delete_deck", {"preview_id": deck_preview["preview_id"]})
+            assert denied.isError and "confirmation_denied" in denied.content[0].text
+            decisions.put("yes")
+            deleted = await call("delete_deck", {"preview_id": deck_preview["preview_id"]})
+            assert deleted["deleted_decks"] == 1 and deleted["deleted_cards"] == 2
+            assert (await call("search_notes", {"query": 'deck:"anki-agent-delete-test"'}))["total"] == 0
+            assert Path((await call("create_backup"))["path"]).is_file()
+            print("PASS: native default-No, No/timeout cancellation, approval-bypass rejection, confirmed card/deck deletion, mandatory backups and safe retries", flush=True)
 
 
 def main():
@@ -103,14 +152,16 @@ def main():
             app.processEvents()
             time.sleep(0.01)
         assert aqt.mw.col is not None, "Disposable profile did not open"
+        original_collection = aqt.mw.col
         runpy.run_path(str(ROOT / "scripts/activate_in_anki.py"))["activate"](
-            ROOT / "dist/anki-agent-0.1.0.ankiaddon", config)
+            ROOT / "dist/anki-agent-0.2.0.ankiaddon", config)
         print("PASS: first-install activation in an already-open Anki app, without restart", flush=True)
         finished = threading.Event()
+        decisions = queue.Queue()
         errors = []
         def worker():
             try:
-                asyncio.run(exercise(credential))
+                asyncio.run(exercise(credential, decisions))
             except BaseException:
                 errors.append(traceback.format_exc())
                 print(errors[-1], flush=True)
@@ -120,17 +171,33 @@ def main():
         deadline = time.monotonic() + 90
         while not finished.is_set() and time.monotonic() < deadline:
             app.processEvents()
+            # Simulate human button presses ONLY in this disposable test instance.
+            # There is no production RPC or environment variable for auto-approval.
+            import importlib
+            bridge = importlib.import_module("anki_agent")
+            if bridge.runner.dialog is not None and not decisions.empty():
+                from aqt.qt import QMessageBox
+                box = bridge.runner.dialog
+                assert box.defaultButton() is box.button(QMessageBox.StandardButton.No)
+                choice = decisions.get_nowait()
+                if choice == "timeout":
+                    box._anki_agent_timer.start(50)
+                else:
+                    button = QMessageBox.StandardButton.Yes if choice == "yes" else QMessageBox.StandardButton.No
+                    box.button(button).click()
             time.sleep(0.005)
         assert finished.is_set(), "MCP smoke test timed out"
         # Inspect only the disposable app's open collection, on its main thread.
         if not errors:
             try:
                 assert aqt.mw.col.card_count() == 6
-                aqt.mw.col.undo()  # Undo the local text example's batch.
-                assert aqt.mw.col.card_count() == 3
+                aqt.mw.col.undo()  # Restore the removed deck and its two Cloze cards.
+                assert aqt.mw.col.card_count() == 8
                 aqt.mw.col.undo()
-                assert aqt.mw.col.note_count() == 0
-                print("PASS: batch generated three cards and is undoable as one operation", flush=True)
+                assert aqt.mw.col.card_count() == 9
+                assert aqt.mw.col.note_count() == 7
+                assert aqt.mw.col is original_collection
+                print("PASS: card and deck deletions are independently undoable; unrelated test deck survived", flush=True)
             except BaseException:
                 errors.append(traceback.format_exc())
         import importlib

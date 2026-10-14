@@ -6,79 +6,24 @@ import secrets
 import threading
 
 from aqt import mw, gui_hooks
-from aqt.operations import CollectionOp, QueryOp
 from aqt.qt import QAction
 from aqt.utils import showInfo, showWarning
 
-from .anki_agent.errors import AgentError
-from .anki_agent.service import Service, OPERATIONS, WriteResult
+from .anki_agent.service import Service
+from .anki_agent.integration import Runner
 from .anki_agent.transport import make_server
 
-service = Service()
+service = Service(backup_root=Path(__file__).parent / "user_files" / "backups")
 server = None
 startup_error = None
-pending = threading.Lock()
 credential_path = Path(__file__).parent / "user_files" / "connection.json"
 
 
+runner = Runner(mw, service)
+
+
 def execute(operation, params):
-    if operation not in OPERATIONS:
-        raise AgentError("unknown_operation", "Operation is not supported.")
-    if not pending.acquire(blocking=False):
-        raise AgentError("busy", "Anki is still processing the previous operation; retry shortly.")
-    finished = threading.Event()
-    outcome = {}
-    cancelled = threading.Event()
-
-    def success(result):
-        outcome["result"] = result.payload if isinstance(result, WriteResult) else result
-        pending.release()
-        finished.set()
-
-    def failure(exc):
-        outcome["error"] = exc if isinstance(exc, AgentError) else AgentError("anki_error", "Anki could not complete the operation.")
-        pending.release()
-        finished.set()
-
-    def start():
-        if cancelled.is_set():
-            return failure(AgentError("timeout", "Request expired before execution."))
-        # Read UI state only on the main thread, before entering the op queue.
-        col = mw.col
-        if operation == "status":
-            return success(service.dispatch(col, operation, params))
-        if col is None:
-            return failure(AgentError("collection_unavailable", "Open an Anki profile first."))
-
-        def run(active_col):
-            if cancelled.is_set():
-                raise AgentError("timeout", "Request expired before execution.")
-            if active_col is not col:
-                raise AgentError("collection_changed", "The profile changed; preview again.")
-            result = service.dispatch(active_col, operation, params)
-            if isinstance(result, WriteResult) and result.changes is None:
-                # CollectionOp expects an OpChanges value even for a replay.
-                from anki.collection import OpChanges
-                result.changes = OpChanges()
-            return result
-
-        try:
-            if operation in {"create_notes", "create_deck"}:
-                CollectionOp(parent=mw, op=run).success(success).failure(failure).run_in_background()
-            else:
-                QueryOp(parent=mw, op=run, success=success).failure(failure).run_in_background()
-        except Exception as exc:
-            failure(exc)
-
-    mw.taskman.run_on_main(start)
-    if not finished.wait(45):
-        cancelled.set()
-        # Keep pending locked until the callback finishes; a running write may
-        # already have committed. Retrying the same preview ID recovers it.
-        raise AgentError("timeout", "Anki timed out. A write may have completed; retry the same preview_id.")
-    if "error" in outcome:
-        raise outcome["error"]
-    return outcome["result"]
+    return runner.execute(operation, params)
 
 
 def start_server():
@@ -108,6 +53,8 @@ def connection_info():
 
 def profile_closed(*_args):
     service.clear()
+    if runner.dialog is not None:
+        runner.dialog.reject()
 
 
 start_server()
