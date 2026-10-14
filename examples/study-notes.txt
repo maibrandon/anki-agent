@@ -1,0 +1,3 @@
+MCP stands for Model Context Protocol. It lets AI applications discover and call tools provided by a server.
+Anki notes hold fields. Card templates turn those fields into cards.
+Cloze notes hide parts of a sentence. A note with c1 and c2 deletions creates two cards.

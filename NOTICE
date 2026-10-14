@@ -1,0 +1,8 @@
+Anki Agent
+Copyright (c) 2026 Brandon Mai and contributors
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This is an independent project, not affiliated with Anki, OpenAI, or Anthropic.
+The MCP server uses the official MCP Python SDK (MIT), installed separately.
+The add-on uses Anki's Python API (AGPL-3.0-or-later); no Anki source or binaries
+are included in the add-on archive. Runtime dependencies retain their licenses.

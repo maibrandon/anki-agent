@@ -1,0 +1,1 @@
+"""Anki Agent MCP server."""
