@@ -8,6 +8,10 @@ The add-on checks the connection, lists and creates decks, lists note types, sea
 
 The MVP has been tested with Anki 25.9.2 in a disposable profile, including a real MCP client. Preview shows proposed note content; it does not render card templates. Media and other note structures are outside the first version.
 
+## Default study prompt
+
+The [`study_prompts` folder](study_prompts/) includes a [default prompt for turning course material into Anki Cloze cards](study_prompts/course-material-to-anki-cloze.md). Fill in the deck, topic, assessment scope, and sources before using it with your agent.
+
 [Setup for Codex and Claude Code](docs/setup.md) · [Deletion and backups](docs/deletion-and-backups.md) · [Local text example](examples/from_text.py) · [Architecture](docs/architecture.md) · [Testing and packaging](docs/development.md)
 
 Licensed under [AGPL-3.0-or-later](LICENSE). No public release or AnkiWeb upload yet.
