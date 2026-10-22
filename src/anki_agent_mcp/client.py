@@ -47,7 +47,7 @@ class BridgeClient:
             except (ValueError, OSError):
                 raise BridgeError("bridge_error", f"Local bridge returned HTTP {exc.code}.") from None
         except (urllib.error.URLError, TimeoutError, ConnectionError):
-            raise BridgeError("anki_unavailable", "Cannot reach Anki. Keep Anki open with the add-on enabled. If a write timed out, retry the same preview_id.") from None
+            raise BridgeError("anki_unavailable", "Cannot reach Anki. Keep Anki open with the add-on enabled. If a write timed out, retry identical tool arguments (the same preview_id when used).") from None
         except ValueError:
             raise BridgeError("bridge_error", "Local bridge returned an invalid response.") from None
         if not isinstance(payload, dict) or "ok" not in payload:

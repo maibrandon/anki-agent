@@ -33,9 +33,10 @@ async def exercise(connection, decisions):
                                   env={**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, "ANKI_AGENT_CONNECTION_FILE": str(connection)})
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
-            await session.initialize()
+            initial = await session.initialize()
+            assert "rename_deck" in initial.instructions and "Never close or restart Anki" in initial.instructions
             tools = await session.list_tools()
-            assert {t.name for t in tools.tools} == {"connection_status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup"}
+            assert {t.name for t in tools.tools} == {"connection_status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards"}
             annotations = {t.name: t.annotations for t in tools.tools}
             assert annotations["delete_cards"].destructiveHint and annotations["delete_deck"].destructiveHint
             assert annotations["preview_delete_cards"].readOnlyHint
@@ -63,7 +64,7 @@ async def exercise(connection, decisions):
             assert (await call("search_notes"))["total"] == 2
             invalid = await session.call_tool("preview_notes", {"notes": notes})
             assert invalid.isError
-            print("PASS: real Anki app, twelve MCP tools, correct destructive annotations, deck creation, read-only preview, Basic/Cloze creation, retry, search, error propagation", flush=True)
+            print("PASS: real Anki app, fourteen MCP tools, correct destructive annotations, deck creation, read-only preview, Basic/Cloze creation, retry, search, error propagation", flush=True)
     result = await asyncio.to_thread(subprocess.run,
         [sys.executable, str(ROOT / "examples/from_text.py"), str(ROOT / "examples/study-notes.txt"), "--deck", "anki-agent", "--create"],
         input="CREATE\n", text=True, capture_output=True,
@@ -78,6 +79,30 @@ async def exercise(connection, decisions):
                 result = await session.call_tool(name, args or {})
                 assert not result.isError, result.content
                 return result.structuredContent or json.loads(result.content[0].text)
+            status = await call("connection_status")
+            assert status["addon_version"] == "0.3.0"
+            assert {"rename_deck", "move_cards"} <= set(status["operations"])
+            decks = (await call("list_decks"))["decks"]
+            source = next(d["id"] for d in decks if d["name"] == "anki-agent")
+            parent = await call("create_deck", {"name": "Organization"})
+            child = await call("create_deck", {"name": "anki-agent::Child"})
+            rename = {"deck_id": source, "new_name": "Organization::Questions", "expected_name": "anki-agent"}
+            renamed = await call("rename_deck", rename)
+            assert renamed["changed_deck_count"] == 2 and renamed["affected_card_count"] == 6
+            assert (await call("rename_deck", rename))["already_applied"]
+            assert (await session.call_tool("rename_deck", {"deck_id": source, "new_name": "Organization", "expected_name": "Organization::Questions"})).isError
+            found = await call("search_notes", {"query": 'deck:"Organization::Questions"'})
+            ids = found["notes"][0]["card_ids"]
+            assert found["notes"][0]["cards"][0]["deck_id"] == source
+            moved = await call("move_cards", {"card_ids": ids, "deck_id": child["deck_id"], "expected_deck_id": source})
+            assert moved["moved_count"] == len(ids)
+            assert (await call("move_cards", {"card_ids": ids, "deck_id": child["deck_id"], "expected_deck_id": source}))["already_applied"]
+            await call("move_cards", {"card_ids": ids, "deck_id": source, "expected_deck_id": child["deck_id"]})
+            await call("rename_deck", {"deck_id": source, "new_name": "anki-agent", "expected_name": "Organization::Questions"})
+            after = (await call("list_decks"))["decks"]
+            assert {"id": parent["deck_id"], "name": "Organization"} in after
+            assert {"id": child["deck_id"], "name": "anki-agent::Child"} in after
+            print("PASS: MCP instructions, deck rename/reparent/promotion with descendants, collision errors, selected card moves, unchanged IDs and retry no-ops", flush=True)
             deck = await call("create_deck", {"name": "anki-agent-delete-test"})
             specs = [
                 {"deck": "anki-agent-delete-test", "note_type": "Basic", "fields": {"Front": "Deletion safety example", "Back": "Must confirm Yes"}},
@@ -154,7 +179,7 @@ def main():
         assert aqt.mw.col is not None, "Disposable profile did not open"
         original_collection = aqt.mw.col
         runpy.run_path(str(ROOT / "scripts/activate_in_anki.py"))["activate"](
-            ROOT / "dist/anki-agent-0.2.0.ankiaddon", config)
+            ROOT / "dist/anki-agent-0.3.0.ankiaddon", config)
         print("PASS: first-install activation in an already-open Anki app, without restart", flush=True)
         finished = threading.Event()
         decisions = queue.Queue()

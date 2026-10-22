@@ -1,5 +1,20 @@
 # Verification
 
+## Version 0.3.0 — October 22, 2026
+
+Verified locally with Python 3.13, Anki/aqt 25.9.2 and MCP SDK 1.30.0:
+
+- `python -m pytest -q`: **86 passed**. New temporary-collection tests cover rename, promotion, reparenting with descendants, retained parent decks and settings, case/Unicode collisions, malformed names, cycles, missing/stale IDs, filtered/default protection, card moves, unchanged scheduling/card/note IDs, untouched siblings, whole-batch validation, retry no-ops, and undo. An older add-on produces an actionable upgrade error.
+- Packaged wheel and add-on passed the complete offscreen app/MCP test with **all fourteen tools**, delivered MCP initialization guidance, descendant rename/reparent/promotion, collision errors, selected card moves and retries. Existing creation, native deletion confirmation, mandatory backups, local text-file workflow, and undo tests also passed. The same disposable collection stayed open throughout.
+- Tests used a temporary Python environment for the new wheel, a unique Anki IPC key, temporary profile/base and separate port. They did not modify the open live app, installed connector, or live collection.
+- Both 0.3.0 packages built successfully; archive contents and source distribution were checked for expected source and absence of credentials/caches.
+
+The existing Codex registration launches the MCP executable directly; it does not install a separate `SKILL.md`. Agent guidance is carried by MCP server initialization instructions and tool descriptions. Both now explain deck organization, source-state preconditions, retry limits and coordinated restarts. Existing sessions must reconnect to load changed MCP instructions/tools.
+
+After the user confirmed that the other session had finished and authorized a restart, Anki was closed normally and both installed packages were upgraded to 0.3.0. Existing credentials and recovery backups were preserved, and previous add-on program files were archived locally for rollback. Anki reopened successfully. A fresh MCP session verified add-on version 0.3.0, an available collection, fourteen tools, and the updated initialization instructions. Live verification used only connection status, deck listing and note-type listing; no live notes, cards or decks were changed by verification. All organization mutation tests remained confined to disposable collections.
+
+## Earlier verification
+
 Verified locally on macOS on October 14, 2026 with Python 3.13, Anki/aqt 25.9.2, and MCP Python SDK 1.30.0.
 
 - `python -m pytest -q`: **59 passed**. Real temporary Collection API tests cover Basic/Cloze generation, escaping, validation, duplicates, limits, preview/session binding, revalidation, retries, JSON serialization, and undo. Deletion tests cover mandatory approval, one-use capabilities, stale scope, profile changes, filtered/default deck protection, cross-deck siblings, backup failure, cancellation after backup, and recovery import with scheduling/media. Loopback HTTP tests cover authentication, browser/Host rejection, malformed requests, busy responses, unavailable Anki, and refusal to forward credentials on redirects.

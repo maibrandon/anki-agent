@@ -20,7 +20,7 @@ Start with a disposable Anki base folder, not your normal collection. Close any 
 /Applications/Anki.app/Contents/MacOS/launcher -b /tmp/anki-agent-disposable
 ```
 
-Create a disposable profile there without signing into AnkiWeb. In that instance, use **Tools → Add-ons → Install from file** and select `dist/anki-agent-0.2.0.ankiaddon`. Restart that instance with the same `-b` argument. Keep it open with the disposable collection loaded.
+Create a disposable profile there without signing into AnkiWeb. In that instance, use **Tools → Add-ons → Install from file** and select `dist/anki-agent-0.3.0.ankiaddon`. Restart that instance with the same `-b` argument. Keep it open with the disposable collection loaded.
 
 **Tools → Anki Agent connection** shows the connection-file path. It contains a bearer token, so do not paste its contents into chats or commit it. The default listener is `127.0.0.1:8767`; startup fails closed if the port is occupied. Close this instance before using another base folder's bridge, or edit the port in its connection file while Anki is closed. The client reads the file each call.
 
@@ -34,7 +34,7 @@ With the intended profile open, use Anki's debug console (`Command+Shift+;` on m
 
 ```python
 import runpy
-runpy.run_path('/absolute/path/to/anki-agent/scripts/activate_in_anki.py')['activate']('/absolute/path/to/anki-agent/dist/anki-agent-0.2.0.ankiaddon')
+runpy.run_path('/absolute/path/to/anki-agent/scripts/activate_in_anki.py')['activate']('/absolute/path/to/anki-agent/dist/anki-agent-0.3.0.ankiaddon')
 ```
 
 This is a one-time installation step. It does not open or edit a collection file, create notes, or print the token. Close the console afterward; normal Anki operations use MCP. See [Anki's console instructions](https://docs.ankiweb.net/misc.html).
@@ -96,7 +96,7 @@ This creates that deck and two notes tagged `anki-agent-test` if those test note
 
 ## Errors and retries
 
-Version 0.2.0 also supports [confirmed deletion and recovery backups](deletion-and-backups.md). Install both updated packages and reload the MCP client to discover the extra tools. Updating an already-loaded Anki add-on requires one restart; normal operations afterward keep Anki open.
+The add-on also supports [confirmed deletion and recovery backups](deletion-and-backups.md). Install both updated packages and reload the MCP client to discover the extra tools. Updating an already-loaded Anki add-on requires one restart; normal operations afterward keep Anki open.
 
 - `anki_unavailable`: start Anki and enable the add-on; check the connection path and port.
 - `collection_unavailable`: load a profile.
@@ -110,3 +110,5 @@ Version 0.2.0 also supports [confirmed deletion and recovery backups](deletion-a
 - `backup_failed`: no deletion occurred; check free disk space and the local backup folder.
 
 The API never opens a live SQLite file. Do not install or test against your real profile until you have reviewed and validated the disposable-profile results.
+
+Version 0.3.0 adds [deck rename/reparenting and selected card moves](deck-organization.md). The existing MCP registration needs no path change. Agent guidance is delivered in MCP initialization instructions, not a separate Codex skill. Update both packages and reload the MCP client to discover the tools. Coordinate any add-on upgrade/restart with the user first; do not interrupt another session. Normal operations keep Anki open.

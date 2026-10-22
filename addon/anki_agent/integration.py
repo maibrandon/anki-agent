@@ -64,7 +64,7 @@ class Runner:
                     return normalize(self.service.dispatch(active_col, operation, params))
 
                 if operation not in DELETE_OPERATIONS:
-                    if operation in {"create_notes", "create_deck"}:
+                    if operation in {"create_notes", "create_deck", "rename_deck", "move_cards"}:
                         CollectionOp(parent=self.mw, op=ordinary).success(success).failure(failure).run_in_background()
                     else:
                         QueryOp(parent=self.mw, op=ordinary, success=success).failure(failure).run_in_background()

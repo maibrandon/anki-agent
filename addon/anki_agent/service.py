@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from .errors import AgentError
 from .backups import create_recovery_backup
 from .deletion import Deletions, DELETE_OPERATIONS
+from . import organization
 
-OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup"}
+OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards"}
 MAX_BATCH = 50
 TTL = 600
 
@@ -38,6 +39,8 @@ class Service:
         allowed = {"status": set(), "list_decks": set(), "list_note_types": set(),
                    "search_notes": {"query", "limit", "offset"},
                    "preview_notes": {"notes"}, "create_notes": {"preview_id"}, "create_deck": {"name"},
+                   "rename_deck": {"deck_id", "new_name", "expected_name"},
+                   "move_cards": {"card_ids", "deck_id", "expected_deck_id"},
                    "preview_delete_cards": {"card_ids"}, "preview_delete_deck": {"deck_id"},
                    "delete_cards": {"preview_id"}, "delete_deck": {"preview_id"}, "create_backup": set()}
         if set(params) - allowed[operation]:
@@ -47,7 +50,8 @@ class Service:
         self.validate_request(operation, params)
         if operation == "status":
             return {"connected": True, "collection_available": col is not None,
-                    "protocol_version": 1, "max_batch": MAX_BATCH}
+                    "protocol_version": 1, "max_batch": MAX_BATCH,
+                    "addon_version": "0.3.0", "operations": sorted(OPERATIONS)}
         if col is None:
             raise AgentError("collection_unavailable", "Open an Anki profile with a collection first.")
         if operation in DELETE_OPERATIONS:
@@ -65,6 +69,12 @@ class Service:
 
     def list_decks(self, col):
         return {"decks": [{"id": d.id, "name": d.name} for d in col.decks.all_names_and_ids()]}
+
+    def rename_deck(self, col, deck_id=None, new_name=None, expected_name=None):
+        return WriteResult(*organization.rename_deck(col, deck_id, new_name, expected_name))
+
+    def move_cards(self, col, card_ids=None, deck_id=None, expected_deck_id=None):
+        return WriteResult(*organization.move_cards(col, card_ids, deck_id, expected_deck_id))
 
     def create_deck(self, col, name=None):
         if not isinstance(name, str) or not name.strip() or name != name.strip() or len(name) > 100 or any(ord(c) < 32 for c in name):
@@ -101,7 +111,9 @@ class Service:
             n = col.get_note(nid)
             notes.append({"id": n.id, "note_type": n.note_type()["name"],
                           "fields": dict(n.items()), "tags": list(n.tags),
-                          "card_ids": list(col.card_ids_of_note(n.id))})
+                          "card_ids": list(col.card_ids_of_note(n.id)),
+                          "cards": [{"id": c.id, "deck_id": c.did, "original_deck_id": c.odid}
+                                    for c in n.cards()]})
         return {"notes": notes, "total": len(ids), "offset": offset,
                 "has_more": offset + limit < len(ids)}
 
