@@ -180,7 +180,7 @@ def test_dispatch_validates_operations_and_collection(service):
             service.validate_request(op, {'arbitrary': True})
         assert e.value.code == 'invalid_request'
     status = service.dispatch(None, 'status', {})
-    assert status['addon_version'] == '0.3.0'
+    assert status['addon_version'] == '0.4.0'
     assert {'rename_deck', 'move_cards'} <= set(status['operations'])
 
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
-output = root / "dist" / "anki-agent-0.3.0.ankiaddon"
+output = root / "dist" / "anki-agent-0.4.0.ankiaddon"
 output.parent.mkdir(exist_ok=True)
 files = sorted(p for p in (root / "addon").rglob("*.py") if "user_files" not in p.parts and "__pycache__" not in p.parts) + [root / "addon" / "manifest.json"]
 with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:

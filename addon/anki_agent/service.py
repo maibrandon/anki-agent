@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from .errors import AgentError
 from .backups import create_recovery_backup
 from .deletion import Deletions, DELETE_OPERATIONS
-from . import organization
+from . import organization, editing
 
-OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards"}
+OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards", "update_note_fields"}
 MAX_BATCH = 50
 TTL = 600
 
@@ -41,6 +41,7 @@ class Service:
                    "preview_notes": {"notes"}, "create_notes": {"preview_id"}, "create_deck": {"name"},
                    "rename_deck": {"deck_id", "new_name", "expected_name"},
                    "move_cards": {"card_ids", "deck_id", "expected_deck_id"},
+                   "update_note_fields": {"notes"},
                    "preview_delete_cards": {"card_ids"}, "preview_delete_deck": {"deck_id"},
                    "delete_cards": {"preview_id"}, "delete_deck": {"preview_id"}, "create_backup": set()}
         if set(params) - allowed[operation]:
@@ -51,7 +52,7 @@ class Service:
         if operation == "status":
             return {"connected": True, "collection_available": col is not None,
                     "protocol_version": 1, "max_batch": MAX_BATCH,
-                    "addon_version": "0.3.0", "operations": sorted(OPERATIONS)}
+                    "addon_version": "0.4.0", "operations": sorted(OPERATIONS)}
         if col is None:
             raise AgentError("collection_unavailable", "Open an Anki profile with a collection first.")
         if operation in DELETE_OPERATIONS:
@@ -75,6 +76,9 @@ class Service:
 
     def move_cards(self, col, card_ids=None, deck_id=None, expected_deck_id=None):
         return WriteResult(*organization.move_cards(col, card_ids, deck_id, expected_deck_id))
+
+    def update_note_fields(self, col, notes=None):
+        return WriteResult(*editing.update_note_fields(col, notes))
 
     def create_deck(self, col, name=None):
         if not isinstance(name, str) or not name.strip() or name != name.strip() or len(name) > 100 or any(ord(c) < 32 for c in name):

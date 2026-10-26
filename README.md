@@ -17,3 +17,7 @@ The [`study_prompts` folder](study_prompts/) includes a [default prompt for turn
 Licensed under [AGPL-3.0-or-later](LICENSE). No public release or AnkiWeb upload yet.
 
 An independent project, not affiliated with Anki, OpenAI, or Anthropic.
+
+## Editing existing answer fields (0.4.0)
+
+`update_note_fields` edits 1-100 existing notes in place after user authorization. Inspect the current note IDs and HTML fields with `search_notes`, then supply plain-text replacements and matching `expected_fields` containing the exact current HTML. Only non-first fields can be edited, protecting card-generating text. Changes use a single undoable Anki transaction; note/card IDs, tags, decks, and scheduling are preserved. Stale fields abort the entire batch. Identical retries are safe. Restart Anki after installing an upgraded add-on, with the user’s approval.
