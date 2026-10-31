@@ -1,4 +1,4 @@
-"""A local-file workflow over real MCP stdio. Preview first; --create asks approval."""
+"""A local-file workflow over real MCP stdio. Preview first; --create writes."""
 import argparse
 import asyncio
 import json
@@ -23,7 +23,7 @@ async def run(args):
                 raise RuntimeError(preview.content)
             data = preview.structuredContent or json.loads(preview.content[0].text)
             print(json.dumps(data, indent=2, ensure_ascii=False))
-            if args.create and input("Create this batch? Type CREATE: ") == "CREATE":
+            if args.create:
                 created = await session.call_tool("create_notes", {"preview_id": data["preview_id"]})
                 if created.isError:
                     raise RuntimeError(created.content)
