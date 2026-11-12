@@ -70,7 +70,7 @@ def move_cards(card_ids: list[int], deck_id: int, expected_deck_id: int) -> dict
 
 @mcp.tool(annotations=WRITE)
 def update_note_fields(notes: list[NoteFieldUpdate]) -> dict[str, Any]:
-    """With user authorization, edit 1-100 existing notes in place. First inspect search_notes. Supply plain-text non-first fields and matching expected_fields with exact current HTML. First/card-generating fields are protected. Atomic, undoable, preserves IDs, tags and scheduling. Retry identical arguments after a timeout; stale fields abort the batch."""
+    """With user authorization, edit 1-100 existing notes in place. First inspect search_notes. Supply plain-text fields and matching expected_fields with exact current HTML. Cloze prompts may be edited if the cloze deletion numbers stay the same. Other first fields are protected. Atomic, undoable, preserves IDs, tags and scheduling. Retry identical arguments after a timeout; stale fields abort the batch."""
     return call("update_note_fields", notes=[n.model_dump() for n in notes])
 
 
