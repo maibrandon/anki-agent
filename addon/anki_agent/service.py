@@ -52,7 +52,7 @@ class Service:
         if operation == "status":
             return {"connected": True, "collection_available": col is not None,
                     "protocol_version": 1, "max_batch": MAX_BATCH,
-                    "addon_version": "0.4.0", "operations": sorted(OPERATIONS)}
+                    "addon_version": "0.4.1", "operations": sorted(OPERATIONS)}
         if col is None:
             raise AgentError("collection_unavailable", "Open an Anki profile with a collection first.")
         if operation in DELETE_OPERATIONS:

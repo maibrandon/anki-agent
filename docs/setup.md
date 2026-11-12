@@ -20,7 +20,7 @@ Start with a disposable Anki base folder, not your normal collection. Close any 
 /Applications/Anki.app/Contents/MacOS/launcher -b /tmp/anki-agent-disposable
 ```
 
-Create a disposable profile there without signing into AnkiWeb. In that instance, use **Tools → Add-ons → Install from file** and select `dist/anki-agent-0.3.0.ankiaddon`. Restart that instance with the same `-b` argument. Keep it open with the disposable collection loaded.
+Create a disposable profile there without signing into AnkiWeb. In that instance, use **Tools → Add-ons → Install from file** and select `dist/anki-agent-0.4.1.ankiaddon`. Restart that instance with the same `-b` argument. Keep it open with the disposable collection loaded.
 
 **Tools → Anki Agent connection** shows the connection-file path. It contains a bearer token, so do not paste its contents into chats or commit it. The default listener is `127.0.0.1:8767`; startup fails closed if the port is occupied. Close this instance before using another base folder's bridge, or edit the port in its connection file while Anki is closed. The client reads the file each call.
 
@@ -34,7 +34,7 @@ With the intended profile open, use Anki's debug console (`Command+Shift+;` on m
 
 ```python
 import runpy
-runpy.run_path('/absolute/path/to/anki-agent/scripts/activate_in_anki.py')['activate']('/absolute/path/to/anki-agent/dist/anki-agent-0.3.0.ankiaddon')
+runpy.run_path('/absolute/path/to/anki-agent/scripts/activate_in_anki.py')['activate']('/absolute/path/to/anki-agent/dist/anki-agent-0.4.1.ankiaddon')
 ```
 
 This is a one-time installation step. It does not open or edit a collection file, create notes, or print the token. Close the console afterward; normal Anki operations use MCP. See [Anki's console instructions](https://docs.ankiweb.net/misc.html).

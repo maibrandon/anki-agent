@@ -1,4 +1,4 @@
-"""Guarded, undoable edits of existing answer fields through Anki APIs."""
+"""Guarded, undoable edits of existing note fields through Anki APIs."""
 import html
 from .errors import AgentError
 
@@ -21,9 +21,11 @@ def update_note_fields(col, notes):
             note = col.get_note(nid)
         except Exception:
             raise AgentError('note_not_found', 'A selected note no longer exists.') from None
-        first = note.note_type()['flds'][0]['name']
-        if any(k not in note or k == first for k in fields):
-            raise AgentError('invalid_fields', 'Only existing non-first fields may be edited; card-generating text is protected.')
+        model = note.note_type()
+        first = model['flds'][0]['name']
+        is_cloze = model['type'] == 1
+        if any(k not in note for k in fields) or (first in fields and not is_cloze):
+            raise AgentError('invalid_fields', 'Edit existing non-first fields or a Cloze prompt.')
         desired = {}
         for key, value in fields.items():
             if (not isinstance(value, str) or len(value) > 20000 or '\x00' in value or '\x1f' in value
@@ -33,8 +35,13 @@ def update_note_fields(col, notes):
             if note[key] not in (expected[key], desired[key]):
                 raise AgentError('note_changed', 'A field changed since inspection; no notes were updated.', {'note_id': nid, 'field': key})
         if any(note[k] != v for k, v in desired.items()):
+            original_clozes = set(note.cloze_numbers_in_fields()) if is_cloze else set()
             for key, value in desired.items():
                 note[key] = value
+            if is_cloze:
+                updated_clozes = set(note.cloze_numbers_in_fields())
+                if updated_clozes != original_clozes or (first in fields and not updated_clozes):
+                    raise AgentError('cloze_numbers_changed', 'Edits must preserve the existing cloze deletion numbers.')
             pending.append(note)
     changes = col.update_notes(pending) if pending else None
     return changes, {'note_ids': sorted(seen), 'updated': len(pending), 'already_applied': not pending}
