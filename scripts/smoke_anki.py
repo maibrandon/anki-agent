@@ -36,7 +36,7 @@ async def exercise(connection, decisions):
             initial = await session.initialize()
             assert "rename_deck" in initial.instructions and "Never close or restart Anki" in initial.instructions
             tools = await session.list_tools()
-            assert {t.name for t in tools.tools} == {"connection_status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards"}
+            assert {t.name for t in tools.tools} == {"connection_status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards", "update_note_fields", "suspend_cards"}
             annotations = {t.name: t.annotations for t in tools.tools}
             assert annotations["delete_cards"].destructiveHint and annotations["delete_deck"].destructiveHint
             assert annotations["preview_delete_cards"].readOnlyHint
@@ -81,7 +81,7 @@ async def exercise(connection, decisions):
                 return result.structuredContent or json.loads(result.content[0].text)
             status = await call("connection_status")
             assert status["addon_version"] == "0.3.0"
-            assert {"rename_deck", "move_cards"} <= set(status["operations"])
+            assert {"rename_deck", "move_cards", "update_note_fields", "suspend_cards"} <= set(status["operations"])
             decks = (await call("list_decks"))["decks"]
             source = next(d["id"] for d in decks if d["name"] == "anki-agent")
             parent = await call("create_deck", {"name": "Organization"})

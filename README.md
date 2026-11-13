@@ -18,6 +18,10 @@ Licensed under [AGPL-3.0-or-later](LICENSE). No public release or AnkiWeb upload
 
 An independent project, not affiliated with Anki, OpenAI, or Anthropic.
 
+## Suspending cards
+
+Use `search_notes` to resolve the exact card IDs, then call `suspend_cards` with those IDs. Suspended cards leave the review queue and retain their notes and review history. The operation is undoable in Anki, and repeating it skips cards already suspended. Verify the result with `is:suspended` in a search. Update both the add-on and MCP server to 0.4.2 to use this operation. Avoid accessibility automation in Anki Browse, which can crash on macOS.
+
 ## Editing existing note fields
 
 `update_note_fields` edits 1-100 existing notes in place after user authorization. Inspect the current note IDs and HTML fields with `search_notes`, then supply plain-text replacements and matching `expected_fields` containing the exact current HTML. You can edit non-first fields and rewrite Cloze prompts while preserving their existing cloze deletion numbers. Other first fields are protected. Changes use a single undoable Anki transaction; note/card IDs, tags, decks, and scheduling are preserved. Stale fields abort the entire batch. Identical retries are safe. Restart Anki after installing an upgraded add-on, with the user’s approval.
