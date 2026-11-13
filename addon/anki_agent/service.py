@@ -6,12 +6,14 @@ import secrets
 import time
 from dataclasses import dataclass
 
+from anki.consts import QUEUE_TYPE_SUSPENDED
+
 from .errors import AgentError
 from .backups import create_recovery_backup
 from .deletion import Deletions, DELETE_OPERATIONS
 from . import organization, editing
 
-OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards", "update_note_fields"}
+OPERATIONS = {"status", "list_decks", "list_note_types", "search_notes", "preview_notes", "create_notes", "create_deck", "preview_delete_cards", "preview_delete_deck", "delete_cards", "delete_deck", "create_backup", "rename_deck", "move_cards", "suspend_cards", "update_note_fields"}
 MAX_BATCH = 50
 TTL = 600
 
@@ -41,6 +43,7 @@ class Service:
                    "preview_notes": {"notes"}, "create_notes": {"preview_id"}, "create_deck": {"name"},
                    "rename_deck": {"deck_id", "new_name", "expected_name"},
                    "move_cards": {"card_ids", "deck_id", "expected_deck_id"},
+                   "suspend_cards": {"card_ids"},
                    "update_note_fields": {"notes"},
                    "preview_delete_cards": {"card_ids"}, "preview_delete_deck": {"deck_id"},
                    "delete_cards": {"preview_id"}, "delete_deck": {"preview_id"}, "create_backup": set()}
@@ -52,7 +55,7 @@ class Service:
         if operation == "status":
             return {"connected": True, "collection_available": col is not None,
                     "protocol_version": 1, "max_batch": MAX_BATCH,
-                    "addon_version": "0.4.1", "operations": sorted(OPERATIONS)}
+                    "addon_version": "0.4.2", "operations": sorted(OPERATIONS)}
         if col is None:
             raise AgentError("collection_unavailable", "Open an Anki profile with a collection first.")
         if operation in DELETE_OPERATIONS:
@@ -76,6 +79,25 @@ class Service:
 
     def move_cards(self, col, card_ids=None, deck_id=None, expected_deck_id=None):
         return WriteResult(*organization.move_cards(col, card_ids, deck_id, expected_deck_id))
+
+    def suspend_cards(self, col, card_ids=None):
+        if (not isinstance(card_ids, list) or not 1 <= len(card_ids) <= 500
+                or any(type(cid) is not int or cid <= 0 for cid in card_ids)
+                or len(set(card_ids)) != len(card_ids)):
+            raise AgentError("invalid_cards", "Provide 1–500 distinct positive integer card IDs.")
+        pending = []
+        for cid in card_ids:
+            try:
+                card = col.get_card(cid)
+            except Exception:
+                raise AgentError("card_not_found", "A selected card no longer exists; no cards were suspended.", {"card_id": cid}) from None
+            if card.queue != QUEUE_TYPE_SUSPENDED:
+                if card.odid:
+                    raise AgentError("filtered_card", "Return selected cards to their normal decks before suspending them.")
+                pending.append(card.id)
+        changes = col.sched.suspend_cards(pending).changes if pending else None
+        return WriteResult(changes, {"card_ids": card_ids, "suspended_count": len(pending),
+                                     "already_applied": not pending})
 
     def update_note_fields(self, col, notes=None):
         return WriteResult(*editing.update_note_fields(col, notes))

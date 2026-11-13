@@ -1,6 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from typing import Any
 
 from .client import BridgeClient, BridgeError
@@ -33,6 +33,8 @@ def call(operation, **params):
         return client.call(operation, **params)
     except BridgeError as exc:
         # Raising makes this an MCP isError tool result, not a false success.
+        if exc.code == "unknown_operation" and operation == "suspend_cards":
+            raise ValueError("addon_update_required: Card suspension requires Anki Agent 0.4.2. Coordinate an update/restart with the user; avoid Anki accessibility automation.") from None
         if exc.code == "unknown_operation" and operation in {"rename_deck", "move_cards", "update_note_fields"}:
             raise ValueError("addon_update_required: This tool requires the Anki Agent 0.4.0 add-on. Coordinate an update/restart with the user first; do not close Anki without approval.") from None
         raise ValueError(f"{exc.code}: {exc}" + (f"; details={exc.details}" if exc.details else "")) from None
@@ -66,6 +68,12 @@ def rename_deck(deck_id: int, new_name: str, expected_name: str) -> dict[str, An
 def move_cards(card_ids: list[int], deck_id: int, expected_deck_id: int) -> dict[str, Any]:
     """With user authorization, move 1–500 selected cards from expected_deck_id to destination deck_id. Resolve IDs/current card deck IDs first. Group cards by source deck. Normal decks only; filtered cards rejected. Preserves note/card IDs and scheduling, leaves sibling cards alone, and supports undo. Identical retries skip cards already at destination; unexpected source state aborts the whole batch."""
     return call("move_cards", card_ids=card_ids, deck_id=deck_id, expected_deck_id=expected_deck_id)
+
+
+@mcp.tool(annotations=WRITE)
+def suspend_cards(card_ids: list[StrictInt]) -> dict[str, Any]:
+    """With user authorization, suspend 1–500 exact card IDs from search_notes. Suspends only those cards, preserves notes and review history, and supports undo. Already suspended cards are skipped. Missing or filtered cards abort before writing."""
+    return call("suspend_cards", card_ids=card_ids)
 
 
 @mcp.tool(annotations=WRITE)
