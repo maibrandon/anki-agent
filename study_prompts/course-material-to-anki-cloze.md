@@ -90,7 +90,13 @@ Prepare the file for import into the named deck. Import it into Anki only if I a
 
 ## 7. Final check and report
 
-Before finishing, check that:
+With the cloze answer hidden, apply these checks to every card. Rewrite or drop any card that fails.
+
+- **Require course knowledge.** Could someone who has not studied the material infer the answer from a repeated word, the same word root, or everyday logic alone? For example, “Work deliberately excluded from a project is recorded as {{c1::project exclusions}}” gives away the answer. A stronger prompt asks where the team would record that an agreed website redesign leaves the existing payment system untouched.
+- **Identify a distinct study goal.** Name what the learner must recognize, distinguish, explain, calculate, or decide. If a stronger card already tests that skill, put the useful example in that card’s Extra field.
+- **Make the answer easy to grade.** If several materially different answers fit, narrow the question. Accept equivalent wording. Include the facts needed to answer a scenario without having to remember a lecture case.
+
+Before finishing, also check that:
 
 - The core ideas and required skills within scope are covered
 - Low-value details and duplicate retrieval targets have been removed
